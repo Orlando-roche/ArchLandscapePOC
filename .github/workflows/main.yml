@@ -14,7 +14,6 @@ jobs:
         with:
           node-version: '16'
       - run: npm install  # If using dependencies
-      - run: npm run build  # If using a build step (e.g., for React); skip for vanilla
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@4.1.5
         with:
