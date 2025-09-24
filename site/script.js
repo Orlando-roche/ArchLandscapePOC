@@ -1,3 +1,6 @@
+// Personal Google Cloud Project OAuth 2.0 Client ID
+//   - Created in Google Cloud Console
+//   - OAuth consent screen configured as External (not Internal)
 const CLIENT_ID = "806987019551-2j02ce3t9b3e0io30coffth5u6c9uoc7.apps.googleusercontent.com";
 
 let tokenClient;
@@ -59,7 +62,7 @@ async function showUserInfo(accessToken) {
 		showStatus(`Failed to fetch profile (${resp.status})`, true);
 		return;
 	}
-    
+
 	const profile = await resp.json();
 	document.getElementById('status').textContent = `✅ Authenticated as ${profile.email}`;
 	document.getElementById('login').disabled = true;
