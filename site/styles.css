@@ -1,0 +1,5 @@
+body { font-family: system-ui, Arial, sans-serif; margin: 2rem; }
+#card { max-width: 560px; padding: 1.25rem; border: 1px solid #ddd; border-radius: 8px; }
+button { padding: 0.6rem 1rem; font-size: 1rem; cursor: pointer; }
+#logout { margin-left: .5rem; display:none; }
+#status { margin-top: 1rem; }
