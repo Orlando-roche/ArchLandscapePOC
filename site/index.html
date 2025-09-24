@@ -49,21 +49,38 @@
       // Lazy-init the token client on first click to ensure library is ready
       document.getElementById('login').addEventListener('click', () => {
         if (!tokenClient) {
-          tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: 'openid email profile', // request email
-            callback: async (tokenResponse) => {
-              if (tokenResponse.error) {
-                showStatus(`Auth error: ${tokenResponse.error}`, true);
-                return;
-              }
-              lastTokenResponse = tokenResponse;
-              await showUserInfo(tokenResponse.access_token);
-            },
-            error_callback: (err) => {
-              showStatus(`Popup error: ${err?.type || 'unknown'}`, true);
-            }
-          });
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: 'openid email profile',
+                callback: async (tokenResponse) => {
+                    if (tokenResponse.error) {
+                        showStatus(`Auth error: ${tokenResponse.error}`, true);
+                        console.error('GIS token error:', tokenResponse);
+                    return;
+                    }
+            lastTokenResponse = tokenResponse;
+            await showUserInfo(tokenResponse.access_token);
+        },
+        error_callback: (err) => {
+            console.error('GIS popup error:', err);
+            showStatus(`Popup error: ${err?.type || 'unknown'}`, true);
+        }
+        });
+        //   tokenClient = google.accounts.oauth2.initTokenClient({
+        //     client_id: CLIENT_ID,
+        //     scope: 'openid email profile', // request email
+        //     callback: async (tokenResponse) => {
+        //       if (tokenResponse.error) {
+        //         showStatus(`Auth error: ${tokenResponse.error}`, true);
+        //         return;
+        //       }
+        //       lastTokenResponse = tokenResponse;
+        //       await showUserInfo(tokenResponse.access_token);
+        //     },
+        //     error_callback: (err) => {
+        //       showStatus(`Popup error: ${err?.type || 'unknown'}`, true);
+        //     }
+        //   });
         }
         // Prompt on first time to ensure consent
         tokenClient.requestAccessToken({ prompt: 'consent' });
