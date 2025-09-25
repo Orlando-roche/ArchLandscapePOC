@@ -36,14 +36,40 @@ jobs:
             diagrams/*
             semgrep.json
       - name: PR comment with diagram
-        if: ${{ github.event_name == 'pull_request' }}
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'pull_request_target' }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const fs = require('fs'); const path = require('path');
-            const mmd = fs.existsSync('diagrams/landscape.mmd') ? fs.readFileSync('diagrams/landscape.mmd','utf8') : '';
-            const afm = fs.existsSync('afm.json') ? JSON.parse(fs.readFileSync('afm.json','utf8')) : {};
-            const body = `### Architecture Landscape (auto-generated)\n\n` +
-              (mmd ? `\\`\\`\\`mermaid\n${mmd}\n\\`\\`\\`\n` : '_No diagram_') +
-              `\n<details><summary>AFM JSON</summary>\n\n\\`\\`\\`json\n${JSON.stringify(afm,null,2)}\n\\`\\`\\`\n</details>`;
-            github.rest.issues.createComment({ issue_number: context.issue.number, owner: context.repo.owner, repo: context.repo.repo, body });
+            const fs = require('fs');
+
+            function read(path) {
+              try { return fs.readFileSync(path, 'utf8'); } catch { return ''; }
+            }
+
+            const diagram = read('diagrams/landscape.mmd');   // Mermaid text
+            let afm = {};
+            try { afm = JSON.parse(read('afm.json') || '{}'); } catch {}
+
+            const fence = '```';
+            const md = [
+              '### Architecture Landscape (auto-generated)',
+              '',
+              diagram ? fence + 'mermaid' + '\n' + diagram + '\n' + fence : '_No diagram_',
+              '',
+              '<details><summary>AFM JSON</summary>',
+              '',
+              fence + 'json',
+              JSON.stringify(afm, null, 2),
+              fence,
+              '</details>'
+            ].join('\n');
+
+            const issue_number = context.payload.pull_request.number;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number,
+              body: md
+            });
+
