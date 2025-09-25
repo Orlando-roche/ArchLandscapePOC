@@ -1,7 +1,7 @@
 # Optional hints to help the scanner name/type your component
 component:
-  id: authenticator
-  name: Authenticator
+  id: archlandscapepoc-from-yml
+  name: ArchLandscapePOC
   type: Application
-  tech: JS + API
+  tech: HTML + JavaScript
   owners: [orlando.pereira@roche.com]
