@@ -127,7 +127,7 @@ def confidence_from_signals(openapi_hits, dep_hits, config_hits, code_hits) -> f
 def to_mermaid(afm: dict) -> str:
     lines = ["graph LR"]
     for c in afm.get("components", []):
-        nid = c["id"].replace(" ","_"); lines.append(f'  {nid}[{c["name"]} ({c["type"]})]')
+        nid = c["id"].replace(" ","_"); lines.append(f'  {nid}[{c["name"]} -{c["type"]}-]')
     for r in afm.get("relations", []):
         f = r["from"].replace(" ","_"); t = r["to"].replace(" ","_")
         through = r.get("through",{}); lab = through.get("protocol") or r.get("verb","uses")
