@@ -3,6 +3,7 @@ on: [push, pull_request]
 permissions:
   contents: read
   pull-requests: write
+  issues: write
 jobs:
   arch-scan:
     runs-on: ubuntu-latest
