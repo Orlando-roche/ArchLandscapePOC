@@ -13,7 +13,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--afm", required=True)
     ap.add_argument("--schema", required=True)
-    ap.add_argument("--allowlist", default="config/allowed_issuers.txt")
+    ap.add_argument("--allowlist", default="config/allowedIdProviders.txt")
     args = ap.parse_args()
     afm = load_json(args.afm)
     schema = load_json(args.schema)

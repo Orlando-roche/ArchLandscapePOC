@@ -51,7 +51,7 @@ jobs:
 
       - name: Validate AFM
         run: |
-          python validate_afm.py --afm afm.json --schema afm_schema.json --allowlist config/allowed_issuers.txt
+          python validate_afm.py --afm afm.json --schema afm_schema.json --allowlist config/allowedIdProviders.txt
 
       # Optional: Semgrep non-blocking
       - name: Semgrep (non-blocking)

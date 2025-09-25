@@ -1,3 +1,5 @@
+# https://github.com/semgrep/semgrep-rules
+# Semgrep Community Edition rules, maintained by Semgrep and the community.
 rules:
   - id: js-gis-init-token-client
     languages: [javascript, typescript]
