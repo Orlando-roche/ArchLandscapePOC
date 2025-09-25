@@ -1,0 +1,7 @@
+# Optional hints to help the scanner name/type your component
+component:
+  id: authenticator
+  name: Authenticator
+  type: Application
+  tech: JS + API
+  owners: [orlando.pereira@roche.com]
