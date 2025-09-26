@@ -1,6 +1,6 @@
 # Optional hints to help the scanner name/type your component
 component:
-  id: archlandscapepoc-from-yml
+  id: archlandscapepoc-from
   name: ArchLandscapePOC-from-yml
   type: Application
   tech: HTML + JavaScript
