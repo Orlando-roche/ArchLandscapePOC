@@ -84,7 +84,7 @@ def read_text(path: str):
     except Exception:
         return None
 
-
+# Scan OpenAPI/Swagger files for OAuth2 security schemes
 def scan_openapi(root: str):
     hits, evidence = [], []
     for path in walk_files(root):
@@ -114,7 +114,7 @@ def scan_openapi(root: str):
                     evidence.append(path)
     return hits, sorted(set(evidence))
 
-
+# Extract title and h1 from first HTML file found (usually index.html)
 def extract_html_title_and_h1(root: str):
     title, h1 = None, None
     for path in walk_files(root):
@@ -130,7 +130,7 @@ def extract_html_title_and_h1(root: str):
                 break
     return title, h1
 
-
+# Currently only JS libraries are checked
 def scan_dependencies(root: str):
     py_hits, js_hits, evidence = [], [], []
     for path in walk_files(root):
@@ -225,9 +225,8 @@ def choose_auth_name(issuer_urls: List[str]) -> str:
                 return label
     return "Authentication/Authorisation"
 
-
 def load_hints(hints_path: Optional[str], repo: str) -> dict:
-    path = hints_path or (os.path.join(repo, "landscape.yaml"))
+    path = hints_path or (os.path.join(repo, "landscape.yml"))
     if os.path.exists(path):
         try:
             import yaml as _yaml
@@ -235,6 +234,8 @@ def load_hints(hints_path: Optional[str], repo: str) -> dict:
             return _yaml.safe_load(read_text(path) or "") or {}
         except Exception:
             return {}
+    else:
+        print("Error in path", path)
     return {}
 
 
@@ -303,6 +304,7 @@ def main():
             "evidence": [],
         }
     ]
+    #print(components)
     relations = []
     if oauth_detected:
         auth_name = choose_auth_name(issuer_urls)
