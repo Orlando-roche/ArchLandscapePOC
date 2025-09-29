@@ -1,0 +1,103 @@
+name: Architecture Scan
+
+on:
+  pull_request:
+    # Run only on PR activity you care about
+    types: [opened, reopened, synchronize, ready_for_review]
+    # Run only for PRs targeting these branches
+    branches: [ main ]
+    # Optional: run only when relevant files change
+    paths:
+      - '**/*.js'
+      - '**/*.ts'
+      - '**/*.html'
+      - 'openapi/**'
+      - 'archscan.py'
+      - 'validate_afm.py'
+      - 'afm_schema.json'
+      - 'rules/**'
+      - '.github/workflows/architecture-scan.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# Ensure only one run per PR is active; cancels older runs of the same PR
+concurrency:
+  group: arch-scan-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  arch-scan:
+    # Extra guard: never run this job unless the event is a PR
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run archscan
+        run: |
+          python archscan.py --repo . --out afm.json --diagram diagrams/landscape.mmd
+
+      - name: Validate AFM
+        run: |
+          python validate_afm.py --afm afm.json --schema afm_schema.json --allowlist config/allowedIdProviders.txt
+
+      # Optional: Semgrep non-blocking
+      - name: Semgrep (non-blocking)
+        run: |
+          python -m pip install semgrep
+          semgrep --config rules/oauth-semgrep.yml --json -o semgrep.json || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-landscape
+          path: |
+            afm.json
+            diagrams/*
+            semgrep.json
+
+      # Comment only on the PR that triggered this run
+      - name: PR comment with diagram
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const read = p => { try { return fs.readFileSync(p, 'utf8'); } catch { return ''; } };
+
+            const diagram = read('diagrams/landscape.mmd');
+            let afm = {};
+            try { afm = JSON.parse(read('afm.json') || '{}'); } catch {}
+
+            const fence = '```';
+            const md = [
+              '### Architecture Landscape (auto-generated)',
+              '',
+              diagram ? fence + 'mermaid' + '\n' + diagram + '\n' + fence : '_No diagram_',
+              '',
+              '<details><summary>AFM JSON</summary>',
+              '',
+              fence + 'json',
+              JSON.stringify(afm, null, 2),
+              fence,
+              '</details>'
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: md
+            });

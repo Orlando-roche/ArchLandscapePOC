@@ -1,0 +1,18 @@
+# https://github.com/semgrep/semgrep-rules
+# Semgrep Community Edition rules, maintained by Semgrep and the community.
+rules:
+  - id: js-gis-init-token-client
+    languages: [javascript, typescript]
+    message: Detected Google Identity Services (initTokenClient)
+    severity: INFO
+    pattern: google.accounts.oauth2.initTokenClient(...)
+  - id: js-gis-request-access-token
+    languages: [javascript, typescript]
+    message: Detected GIS requestAccessToken
+    severity: INFO
+    pattern: requestAccessToken(...)
+  - id: js-oidc-userinfo
+    languages: [javascript, typescript]
+    message: Calls OIDC userinfo endpoint (Google)
+    severity: INFO
+    pattern: fetch('https://openidconnect.googleapis.com/v1/userinfo', ...)
