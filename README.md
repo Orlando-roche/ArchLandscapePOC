@@ -1,6 +1,6 @@
 # Architecture Landscape — POC
 
-> Automated, always-fresh architecture from code, configs, and CI.
+> Automated, always-fresh architecture from code.
 
 ## TL;DR
 - Generate an **Architecture Fact Model (AFM)** + **diagram** from the repo.
