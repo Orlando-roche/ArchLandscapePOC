@@ -66,7 +66,7 @@ graph LR
 
 ---
 
-  ## 2) Lightweight AFM (what we store)
+  ## 2) Lightweight AFM
 
 ```json
   {
