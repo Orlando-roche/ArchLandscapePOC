@@ -1,0 +1,11 @@
+# rules/android-auth.yml
+rules:
+- id: android-appauth-usage
+  languages: [kotlin, java]
+  message: "AppAuth/OIDC usage"
+  severity: INFO
+  pattern-either:
+    - pattern: AuthorizationServiceConfiguration(...)
+    - pattern: AuthorizationRequest.Builder(...)
+    - pattern: AuthorizationService(...)
+
