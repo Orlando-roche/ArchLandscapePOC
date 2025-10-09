@@ -4,8 +4,8 @@
 
 ## TL;DR
 - Generate an **Architecture Fact Model (AFM)** + **diagram** from the repo.
-- Comment results on PRs/MRs and validate against governance rules.
-- Optionally aggregate across repos in a central registry for org views.
+- Comment results on PRs and validate against governance rules.
+- [Optionally] aggregate across repos in a central registry for org views.
 
 ---
 
@@ -104,7 +104,7 @@ graph LR
 - **Code:** imports & calls (AppAuth, Retrofit/OkHttp, `SQLiteDatabase`, OAuth flows).
 - **Build/Deps:** `build.gradle(.kts)`, **version catalogs** (`gradle/libs.versions.toml`), **buildSrc/Dependencies.kt**, convention plugins.
 - **Configs:** `AndroidManifest.xml` (redirect schemes/permissions), `openapi.yaml`, env/config YAML.
-- **IaC:** K8s/Helm/Terraform (gateways, managed IdPs, DBs).
+- **Infra as Code:** Kubernetes/Terraform (gateways, managed Identity Providers, DBs).
 
 ---
 

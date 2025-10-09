@@ -243,7 +243,7 @@ def enrich_with_packages_mapping(afm: dict, version_map: Dict[str, str]):
             })
         if hk == "www-roche-com":
             pkg_id = ensure_package_component(afm, "com/roche/rpm/productizedplatform/authentication", version_map)
-            print(hk, pkg_id)
+            #print(hk, pkg_id)
             add_relation(afm, {
                 "from": svc["id"], "to": pkg_id, "verb": "belongs to",
                 "through": {"protocol": "classification"},

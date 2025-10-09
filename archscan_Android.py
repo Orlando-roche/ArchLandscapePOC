@@ -435,7 +435,7 @@ def main():
     app_name, app_id = pick_app_name_and_id(root)
 
     gradle_deps, gradle_ev = detect_dependencies_agnostic(root)
-    print(gradle_deps)
+    #print(gradle_deps)
     #print()
     #print(gradle_ev)
 
