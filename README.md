@@ -1,9 +1,13 @@
 # Architecture Landscape — POC
 
+> Automated, always-fresh architecture from code, configs, and CI.
+
 ## TL;DR
 - Generate an **Architecture Fact Model (AFM)** + **diagram** from the repo.
 - Comment results on PRs/MRs and validate against governance rules.
 - Optionally aggregate across repos in a central registry for org views.
+
+---
 
 ## 1) End-state architecture
 
@@ -60,4 +64,41 @@ graph LR
   I-- "preview diagram" --> dev
   ```
 
+---
+
   ## 2) Lightweight AFM (what we store)
+
+```json
+  {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Architecture Fact Model (AFM)",
+  "type": "object",
+  "required": [
+    "components",
+    "relations"
+  ],
+  "properties": {
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}
+```
+
+**Principles**
+- Every node/edge has **evidence** and a **confidence**.
+- IDs are stable (kebab-case), names are human-friendly.
+- Keep it small; add fields only when they drive decisions.
+
+---
+
+## 3) Where facts come from (signals)
