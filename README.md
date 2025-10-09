@@ -58,3 +58,6 @@ graph LR
   M-- "cards" -->K
   O-- "PR/MR diagram + AFM" -->P
   I-- "preview diagram" --> dev
+  ```
+
+  ## 2) Lightweight AFM (what we store)
