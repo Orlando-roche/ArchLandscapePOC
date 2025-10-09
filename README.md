@@ -156,9 +156,6 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 
 python archscan.py --repo . --out afm.json --diagram diagrams/landscape.mmd
-
-# local android repo
-python archscan_android.py --repo ~/code/android-repo   --out outputs/android-afm.json --diagram outputs/android.mmd
 ```
 
 **Render diagram**
