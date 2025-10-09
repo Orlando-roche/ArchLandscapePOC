@@ -13,8 +13,8 @@
 #python -m pip install -r requirements.txt
 
 # 4) Run the scanner (it will create the diagrams folder if needed)
-python archscan.py --repo . --out afm.json --diagram diagrams/landscape.mmd
+python archscan.py --repo . --out outputs/web-afm.json --diagram outputs/web-landscape.mmd
 
 # 5) Validate (include your allowlist if you’re using it)
-python validate_afm.py --afm afm.json --schema afm_schema.json --allowlist config/allowed_issuers.txt
+python validate_afm.py --afm outputs/web-afm.json --schema afm_schema.json --allowlist config/allowed_issuers.txt
 
