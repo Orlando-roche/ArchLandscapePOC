@@ -1,0 +1,10 @@
+# rules/android-upload.yml
+rules:
+- id: android-retrofit-multipart
+  languages: [kotlin, java]
+  message: "Retrofit multipart upload"
+  severity: INFO
+  pattern-either:
+    - pattern: '@retrofit2.http.Multipart @retrofit2.http.POST(...)'
+    - pattern: 'okhttp3.MultipartBody.Builder(...)'
+

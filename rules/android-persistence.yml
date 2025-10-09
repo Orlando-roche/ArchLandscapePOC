@@ -1,0 +1,28 @@
+# rules/android-persistence.yml
+rules:
+- id: android-room
+  languages: [kotlin, java]
+  message: "Room (SQLite) persistence"
+  severity: INFO
+  pattern-either:
+    - pattern: '@androidx.room.Entity'
+    - pattern: '@androidx.room.Dao'
+    - pattern: '@androidx.room.Database'
+    - pattern: 'androidx.room.Room.databaseBuilder(...)'
+- id: android-encrypted-prefs
+  languages: [kotlin, java]
+  message: "EncryptedSharedPreferences"
+  severity: INFO
+  pattern: 'androidx.security.crypto.EncryptedSharedPreferences.create(...)'
+# rules/android-sqlite.yml
+- id: android-sqlite-direct
+  languages: [kotlin, java]
+  message: "Direct SQLite usage (SQLiteDatabase/SQLiteOpenHelper)"
+  severity: INFO
+  pattern-either:
+    - pattern: android.database.sqlite.SQLiteDatabase
+    - pattern: SQLiteOpenHelper
+    - pattern: getWritableDatabase(...)
+    - pattern: getReadableDatabase(...)
+    - pattern: execSQL(...)
+    - pattern: rawQuery(...)

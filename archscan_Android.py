@@ -4,8 +4,7 @@ archscan_android.py
 Minimal Android architecture fact extractor (AFM) for a central scanner repo.
 
 Signals (deterministic, lightweight):
-- Gradle deps: AppAuth, Retrofit/OkHttp, Room, Encrypted SharedPrefs
-- AndroidManifest.xml: INTERNET permission, redirect schemes (for OIDC)
+- full system scan
 - Kotlin/Java patterns:
     * Auth (AppAuth classes/imports)
     * Upload (Retrofit.baseUrl(...), @Multipart, MultipartBody.Builder)
@@ -36,13 +35,6 @@ TEXT_EXTS = {
 }
 SKIP_DIRS = {".git", ".gradle", ".idea", "build", "out"}
 
-# ---- Patterns ----
-APP_AUTH_DEPS = ("net.openid:appauth",)
-RETROFIT_DEPS = ("com.squareup.retrofit2:retrofit",)
-OKHTTP_DEPS = ("com.squareup.okhttp3:okhttp",)
-ROOM_DEPS = ("androidx.room:room-runtime", "androidx.room:room-ktx")
-SEC_CRYPTO = ("androidx.security:security-crypto",)
-
 # Kotlin/Java code indicators
 AUTH_CODE_PATTERNS = [
     r"\bAuthorizationServiceConfiguration\b",
@@ -58,12 +50,16 @@ UPLOAD_CODE_PATTERNS = [
     r"\bMultipartBody\.Builder\b",
 ]
 
-ROOM_CODE_PATTERNS = [
-    r"@androidx\.room\.Entity\b",
-    r"@androidx\.room\.Dao\b",
-    r"@androidx\.room\.Database\b",
-    r"\bRoom\.databaseBuilder\b",
-]
+# SQLite usage
+SQLITE_CODE_PATTERNS = [
+     r"\bandroid\.database\.sqlite\.SQLiteDatabase\b",
+     r"\bSQLiteOpenHelper\b",
+     r"\bgetWritableDatabase\(",
+     r"\bgetReadableDatabase\(",
+     r"\bopenDatabase\(",
+     r"\bexecSQL\(",
+     r"\brawQuery\(",
+ ]
 
 ENC_PREFS_PATTERN = (
     r"\bandroidx\.security\.crypto\.EncryptedSharedPreferences\.create\b"
@@ -77,7 +73,6 @@ KNOWN_IDP_HOSTS = [
     ("cognito-idp", "Amazon Cognito"),
     ("keycloak", "Keycloak"),
 ]
-
 
 def walk_files(root: str):
     for dirpath, dirnames, filenames in os.walk(root):
@@ -94,99 +89,6 @@ def read_text(path: str) -> Optional[str]:
     except Exception:
         return None
 
-
-def detect_gradle_deps(root: str) -> Tuple[Dict[str, List[str]], List[str]]:
-    deps = {"appauth": [], "retrofit": [], "okhttp": [], "room": [], "sec_crypto": []}
-    evidence = []
-    for p in walk_files(root):
-        low = p.lower()
-        if low.endswith(".gradle") or low.endswith(".gradle.kts"):
-            txt = read_text(p) or ""
-            hit = False
-            for s in APP_AUTH_DEPS:
-                if s in txt:
-                    deps["appauth"].append(s)
-                    hit = True
-            for s in RETROFIT_DEPS:
-                if s in txt:
-                    deps["retrofit"].append(s)
-                    hit = True
-            for s in OKHTTP_DEPS:
-                if s in txt:
-                    deps["okhttp"].append(s)
-                    hit = True
-            for s in ROOM_DEPS:
-                if s in txt:
-                    deps["room"].append(s)
-                    hit = True
-            for s in SEC_CRYPTO:
-                if s in txt:
-                    deps["sec_crypto"].append(s)
-                    hit = True
-            if hit:
-                evidence.append(p)
-    # dedupe
-    for k in deps:
-        deps[k] = sorted(set(deps[k]))
-    evidence = sorted(set(evidence))
-    return deps, evidence
-
-
-def parse_manifest(root: str) -> Tuple[Dict, List[str]]:
-    info = {"internet": False, "redirect_schemes": []}
-    evidence = []
-    # attempt common locations first
-    candidates = []
-    for p in walk_files(root):
-        if p.endswith("AndroidManifest.xml"):
-            candidates.append(p)
-    for path in candidates:
-        try:
-            xml = ET.parse(path)
-            ns = {"android": "http://schemas.android.com/apk/res/android"}
-            root_el = xml.getroot()
-            # INTERNET permission
-            for up in root_el.findall("./uses-permission"):
-                name = up.get("{http://schemas.android.com/apk/res/android}name", "")
-                if name.endswith("INTERNET"):
-                    info["internet"] = True
-                    evidence.append(path)
-            # Redirect schemes (intent-filter data)
-            for act in root_el.findall(".//activity"):
-                for intent in act.findall("./intent-filter"):
-                    hasView = any(
-                        el.get("{http://schemas.android.com/apk/res/android}name", "")
-                        == "android.intent.action.VIEW"
-                        for el in intent.findall("./action")
-                    )
-                    if not hasView:
-                        continue
-                    for data in intent.findall("./data"):
-                        scheme = data.get(
-                            "{http://schemas.android.com/apk/res/android}scheme"
-                        )
-                        host = data.get(
-                            "{http://schemas.android.com/apk/res/android}host"
-                        )
-                        if scheme:
-                            info["redirect_schemes"].append(
-                                {"scheme": scheme, "host": host or ""}
-                            )
-                            evidence.append(path)
-        except Exception:
-            continue
-    # dedupe schemes
-    seen = set()
-    uniq = []
-    for d in info["redirect_schemes"]:
-        key = (d["scheme"], d.get("host", ""))
-        if key not in seen:
-            seen.add(key)
-            uniq.append(d)
-    info["redirect_schemes"] = uniq
-    return info, sorted(set(evidence))
-
-
 def grep_patterns(
     root: str, patterns: List[str], exts: Optional[set] = None
 ) -> List[str]:
@@ -200,7 +102,6 @@ def grep_patterns(
         if regex.search(txt):
             hits.append(p)
     return sorted(set(hits))
-
 
 def find_base_urls(root: str) -> Tuple[List[str], List[str]]:
     """Return (urls, evidence paths). Finds literal Retrofit .baseUrl("https://...") and fallback http(s) URLs."""
@@ -231,7 +132,6 @@ def find_base_urls(root: str) -> Tuple[List[str], List[str]]:
             continue
     norm = sorted(set(norm))
     return norm, sorted(set(evidence))
-
 
 def pick_app_name_and_id(root: str) -> Tuple[str, str]:
     """Try to derive a display name and stable id from Gradle or fallback to folder name."""
@@ -267,35 +167,7 @@ def choose_auth_name_from_urls(urls: List[str]) -> str:
                 return label
     return "Authentication/Authorisation"
 
-
-def confidence_score(categories: List[bool]) -> float:
-    return (
-        round(sum(1 for c in categories if c) / float(len(categories)), 2)
-        if categories
-        else 0.0
-    )
-
-
-def mermaid_from_afm(afm: Dict) -> str:
-    def q(s: str) -> str:
-        return (s or "").replace('"', '\\"')
-
-    lines = ["graph LR"]
-    for c in afm.get("components", []):
-        nid = c["id"].replace(" ", "_")
-        label = f'{c.get("name","?")} ({c.get("type","?")})'
-        lines.append(f'  {nid}["{q(label)}"]')
-    for r in afm.get("relations", []):
-        f = r["from"].replace(" ", "_")
-        t = r["to"].replace(" ", "_")
-        lab = (r.get("through") or {}).get("protocol") or r.get("verb", "uses")
-        flows = (r.get("through") or {}).get("flows") or []
-        if flows:
-            lab = f'{lab} / {", ".join(flows)}'
-        lines.append(f"  {f} -->|{q(lab)}| {t}")
-    return "\n'.join(lines)"  # fixed below
-
-
+# Move out to Utils 
 def mermaid_from_afm(afm: Dict) -> str:  # re-declare to correct accidental quote
     def q(s: str) -> str:
         return (s or "").replace('"', '\\"')
@@ -315,6 +187,238 @@ def mermaid_from_afm(afm: Dict) -> str:  # re-declare to correct accidental quot
         lines.append(f"  {f} -->|{q(lab)}| {t}")
     return "\n".join(lines)
 
+# ---- Add these helpers to archscan_android.py ----
+from typing import Set
+import pathlib
+
+# Known libraries we care about -> how to recognize them
+KNOWN_COORD_PREFIXES = {
+    # lib        -> list of prefixes that identify it
+    "retrofit":   ["com.squareup.retrofit2:retrofit"],
+    "okhttp":     ["com.squareup.okhttp3:okhttp"],
+    "room":       ["androidx.room:room-runtime", "androidx.room:room-ktx"],
+    "appauth":    ["net.openid:appauth"],
+    "sec_crypto": ["androidx.security:security-crypto"],
+}
+
+# Import patterns that imply a lib (works even if build files hide the GAV)
+IMPORT_TO_LIB = {
+    r"\bimport\s+retrofit2\.": "retrofit",
+    r"\bimport\s+okhttp3\.": "okhttp",
+    r"\bimport\s+androidx\.room\.": "room",
+    r"\bimport\s+net\.openid\.appauth\.": "appauth",
+    r"\bandroidx\.security\.crypto\.": "sec_crypto",
+}
+
+def _all_files(root: str, exts: Set[str]) -> List[str]:
+    out = []
+    for p in walk_files(root):
+        if os.path.splitext(p)[1].lower() in exts:
+            out.append(p)
+    return out
+
+def _read(p: str) -> str:
+    return read_text(p) or ""
+
+def _classify_gav(gav: str) -> Optional[str]:
+    """Map a GAV (group:artifact[:version]) to one of our known libs."""
+    if not gav: return None
+    base = ":".join(gav.split(":")[:2]).lower()
+    for lib, prefixes in KNOWN_COORD_PREFIXES.items():
+        for pref in prefixes:
+            if base.startswith(pref):
+                return lib
+    return None
+
+def _dedupe(seq):
+    seen = set(); out = []
+    for x in seq:
+        if x not in seen:
+            seen.add(x); out.append(x)
+    return out
+
+# 1) Parse version catalogs: gradle/libs.versions.toml
+def _parse_version_catalogs(root: str) -> Tuple[Dict[str,str], List[str]]:
+    """
+    Returns: (alias -> 'group:artifact:version', evidence_paths)
+      e.g., 'libs.retrofit' -> 'com.squareup.retrofit2:retrofit:2.9.0'
+    """
+    alias_to_gav, ev = {}, []
+    # Support multiple catalogs (Gradle allows catalogs/*.toml)
+    tomls = []
+    for p in walk_files(root):
+        low = p.lower()
+        if low.endswith(".toml") and ("/gradle/libs.versions.toml" in low or "/gradle/" in low and "versions" in os.path.basename(p).lower()):
+            tomls.append(p)
+    # Python 3.11 has tomllib
+    try:
+        import tomllib as toml
+    except Exception:
+        try:
+            import tomli as toml
+        except Exception:
+            toml = None
+    for t in tomls:
+        try:
+            data = toml.loads(_read(t)) if toml else {}
+        except Exception:
+            data = {}
+        libs = (data.get("libraries") or {})
+        versions = (data.get("versions") or {})
+        for alias, spec in libs.items():
+            # forms:
+            # alias = { group = "...", name = "...", version = "1.2.3" }
+            # alias = { module = "group:name", version.ref = "x" }
+            if not isinstance(spec, dict): continue
+            group = spec.get("group"); name = spec.get("name")
+            module = spec.get("module")
+            ver = spec.get("version")
+            if not ver and "version.ref" in spec:
+                ref = spec["version.ref"]; ver = versions.get(ref)
+            if module and ":" in module:
+                g, n = module.split(":", 1)
+                group, name = g, n
+            if group and name:
+                gav = f"{group}:{name}" + (f":{ver}" if ver else "")
+                alias_to_gav[f"libs.{alias}"] = gav
+                ev.append(t)
+    return alias_to_gav, sorted(set(ev))
+
+# 2) Parse buildSrc/Dependencies.kt (and similar) for constants/objects
+def _parse_buildsrc_constants(root: str) -> Tuple[Dict[str,str], List[str]]:
+    """
+    Returns: (symbol -> 'group:artifact:version', evidence_paths)
+      e.g., 'Deps.Retrofit.core' => 'com.squareup.retrofit2:retrofit:2.9.0'
+    Handles simple const vals and nested objects.
+    """
+    symbol_to_gav, ev = {}, []
+    kt_files = [p for p in _all_files(root, {".kt", ".kts"}) if "/buildsrc" in p.lower() or "/build-src" in p.lower() or "/build_logic" in p.lower()]
+    # Simple const pattern: const val X = "group:artifact:version"
+    const_re = re.compile(r'const\s+val\s+([A-Za-z0-9_\.]+)\s*=\s*["\']([A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(?::[A-Za-z0-9+_.\-]+)?)["\']')
+    # Object path capture: object Deps { object Retrofit { const val core = "g:a:v" } }
+    path_stack_re = re.compile(r'^\s*object\s+([A-Za-z0-9_]+)\s*\{?')
+    end_brace_re  = re.compile(r'^\s*}\s*$')
+    for fp in kt_files:
+        txt = _read(fp)
+        if not txt: continue
+        ev.append(fp)
+        # flat consts
+        for m in const_re.finditer(txt):
+            key = m.group(1); gav = m.group(2)
+            symbol_to_gav[key] = gav
+            # Also provide a namespaced alias like Deps.key if file declares object Deps { const val key = ... }
+        # naive nested path reconstruction
+        stack = []
+        for line in txt.splitlines():
+            if path_stack_re.search(line):
+                stack.append(path_stack_re.search(line).group(1))
+                continue
+            if end_brace_re.search(line):
+                if stack: stack.pop()
+                continue
+            m = re.search(r'const\s+val\s+([A-Za-z0-9_]+)\s*=\s*["\']([^"\']+)["\']', line)
+            if m and stack:
+                sym = ".".join(stack + [m.group(1)])
+                gav = m.group(2)
+                # Normalize e.g. Deps.Retrofit.core
+                symbol_to_gav[sym] = gav
+    return symbol_to_gav, sorted(set(ev))
+
+# 3) Sweep all build.gradle(.kts) for direct coords AND alias calls
+def _parse_build_gradle_everywhere(root: str) -> Tuple[Set[str], Set[str], Set[str], List[str]]:
+    """
+    Returns:
+      direct_gavs: {'group:artifact:version', ...}
+      lib_aliases: {'libs.retrofit', 'libs.okhttp.logging', ...}
+      symbols:     {'Deps.Retrofit.core', 'Dependencies.Retrofit', ...}
+      evidence:    [file paths]
+    """
+    direct_gavs, lib_aliases, symbols, ev = set(), set(), set(), []
+    gradles = [p for p in _all_files(root, {".gradle", ".kts"}) if os.path.basename(p) in ("build.gradle","build.gradle.kts") or p.endswith(".gradle") or p.endswith(".gradle.kts")]
+    if not gradles:
+        gradles = [p for p in _all_files(root, {".gradle", ".kts"})]  # fallback
+    # patterns
+    # implementation "g:a:v" OR 'g:a:v'
+    gav_call = re.compile(r'\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\s*\(?\s*["\']([A-Za-z0-9_.\-]+:[A-Za-z0-9_.\-]+(?::[A-Za-z0-9+_.\-]+)?)["\']')
+    # implementation(libs.xyz) OR implementation ( libs.xyz )
+    libs_call = re.compile(r'\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\s*\(?\s*(libs\.[A-Za-z0-9_.-]+)\s*\)?')
+    # implementation(Deps.Retrofit.core) / implementation(Dependencies.Retrofit.core)
+    symbol_call = re.compile(r'\b(?:implementation|api|compileOnly|runtimeOnly|kapt|ksp|testImplementation|androidTestImplementation)\s*\(?\s*([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s*\)?')
+    for fp in gradles:
+        txt = _read(fp)
+        if not txt: continue
+        ev.append(fp)
+        for m in gav_call.finditer(txt):
+            direct_gavs.add(m.group(1))
+        for m in libs_call.finditer(txt):
+            lib_aliases.add(m.group(1))
+        for m in symbol_call.finditer(txt):
+            # Avoid mistaking method calls; keep likely constants/objects with dots
+            sym = m.group(1)
+            # Ignore when it's obvious code like retrofit2.Retrofit(...) etc.
+            if ":" in sym: continue
+            if sym.startswith("libs."):  # covered by libs_call
+                lib_aliases.add(sym); continue
+            symbols.add(sym)
+    return direct_gavs, lib_aliases, symbols, sorted(set(ev))
+
+# 4) Imports in source: infer library usage even if GAV is hidden
+def _imports_imply_libs(root: str) -> Tuple[Set[str], List[str]]:
+    implied, ev = set(), []
+    kt_java = _all_files(root, {".kt",".java"})
+    if not kt_java: return implied, ev
+    regexes = [(re.compile(p), lib) for p, lib in IMPORT_TO_LIB.items()]
+    for fp in kt_java:
+        txt = _read(fp)
+        if not txt: continue
+        for rx, lib in regexes:
+            if rx.search(txt):
+                implied.add(lib); ev.append(fp); break
+    return implied, sorted(set(ev))
+
+def detect_dependencies_agnostic(root: str) -> Tuple[Dict[str, List[str]], List[str]]:
+    """
+    Aggregates dependencies from:
+      - direct coords in any build.gradle(.kts)
+      - version catalogs (libs.versions.toml) for libs.alias indirection
+      - buildSrc constants/objects (Dependencies.kt, Deps.*, etc.)
+      - import usage in Kotlin/Java
+    Returns: (deps dict, evidence paths)
+    """
+    deps: Dict[str, List[str]] = {"appauth": [], "retrofit": [], "okhttp": [], "room": [], "sec_crypto": []}
+    evidence: List[str] = []
+
+    # Collect everywhere
+    alias_map, ev1 = _parse_version_catalogs(root)
+    sym_map,   ev2 = _parse_buildsrc_constants(root)
+    direct_gavs, lib_aliases, symbols, ev3 = _parse_build_gradle_everywhere(root)
+    implied_libs, ev4 = _imports_imply_libs(root)
+
+    evidence.extend(ev1 + ev2 + ev3 + ev4)
+
+    # Resolve aliases -> GAV
+    resolved_from_alias = [alias_map[a] for a in lib_aliases if a in alias_map]
+    # Resolve symbols -> GAV
+    resolved_from_sym   = [sym_map[s]   for s in symbols     if s in sym_map]
+
+    all_gavs = set(direct_gavs) | set(resolved_from_alias) | set(resolved_from_sym)
+
+    # Classify GAVs into buckets
+    for gav in all_gavs:
+        lib = _classify_gav(gav)
+        if lib:
+            deps[lib].append(gav)
+
+    # Add implied libs (imports) as weak evidence even if GAV couldn’t be resolved
+    for lib in implied_libs:
+        if not deps[lib]:
+            deps[lib] = []  # keep list type
+    # De-dupe and sort
+    for k in deps:
+        deps[k] = sorted(set(deps[k]))
+
+    return deps, sorted(set(evidence))
+
 
 def main():
     ap = argparse.ArgumentParser(
@@ -330,19 +434,21 @@ def main():
     # Basic identity
     app_name, app_id = pick_app_name_and_id(root)
 
-    # Signals
-    gradle_deps, gradle_ev = detect_gradle_deps(root)
-    manifest_info, manifest_ev = parse_manifest(root)
+    gradle_deps, gradle_ev = detect_dependencies_agnostic(root)
+    print(gradle_deps)
+    #print()
+    #print(gradle_ev)
 
-    auth_ev = grep_patterns(root, AUTH_CODE_PATTERNS, {".kt", ".java", ".kts"})
-    room_ev = grep_patterns(root, ROOM_CODE_PATTERNS, {".kt", ".java"})
+    # Revisit auth !! 
+    auth_ev = grep_patterns(root, AUTH_CODE_PATTERNS, {".kt", ".java", ".kts"})    
     enc_ev = grep_patterns(root, [ENC_PREFS_PATTERN], {".kt", ".java"})
     upload_ev = grep_patterns(root, UPLOAD_CODE_PATTERNS, {".kt", ".java"})
 
+    # confirmed 
     api_urls, url_ev = find_base_urls(root)
+    sqlite_ev  = grep_patterns(root, SQLITE_CODE_PATTERNS, {".kt",".java"})
 
-    components = []
-    relations = []
+    components, relations = [], []
 
     # Main app node
     components.append(
@@ -351,50 +457,14 @@ def main():
             "name": app_name,
             "type": "MobileApp",
             "tech": "Android (Kotlin/Java)",
-            "metadata": {"manifest": manifest_info, "gradle": gradle_deps},
-            "evidence": [{"source": "manifest", "path": p} for p in manifest_ev]
-            + [{"source": "gradle", "path": p} for p in gradle_ev],
+            "metadata": {
+            "gradle": gradle_deps
+            }
         }
     )
-
-    # Auth node (if detected)
-    auth_detected = bool(
-        gradle_deps["appauth"] or auth_ev or manifest_info["redirect_schemes"]
-    )
-    if auth_detected:
-        # Try infer IdP label from any URLs seen (baseUrls or code/strings)
-        auth_name = choose_auth_name_from_urls(api_urls)
-        auth_id = (
-            re.sub(r"[^a-zA-Z0-9_-]+", "-", auth_name).strip("-").lower() or "auth"
-        )
-        components.append(
-            {
-                "id": auth_id,
-                "name": auth_name,
-                "type": "Auth",
-                "tech": "OAuth 2.0 (OIDC)",
-                "metadata": {
-                    "redirect_schemes": manifest_info["redirect_schemes"],
-                    "libs": gradle_deps["appauth"],
-                },
-                "evidence": [{"source": "code", "path": p} for p in auth_ev]
-                + [{"source": "manifest", "path": p} for p in manifest_ev],
-            }
-        )
-        relations.append(
-            {
-                "from": app_id,
-                "to": auth_id,
-                "verb": "uses",
-                "through": {"protocol": "OAuth 2.0"},
-                "evidence": [{"source": "code", "path": p} for p in auth_ev]
-                + [{"source": "manifest", "path": p} for p in manifest_ev],
-                "confidence": confidence_score([True]),
-            }
-        )
-
+    
     # API / Upload target (if URL or upload patterns)
-    if api_urls or upload_ev or gradle_deps["retrofit"] or gradle_deps["okhttp"]:
+    if api_urls or upload_ev:        
         # one component per host
         for u in api_urls or []:
             host = urlparse(u).netloc
@@ -419,8 +489,7 @@ def main():
                     "verb": "calls",
                     "through": {"protocol": "HTTPS"},
                     "evidence": [{"source": "code", "path": p} for p in url_ev]
-                    + [{"source": "code", "path": p} for p in upload_ev],
-                    "confidence": confidence_score([bool(api_urls), bool(upload_ev)]),
+                    + [{"source": "code", "path": p} for p in upload_ev]
                 }
             )
         # If no literal URLs but upload libs/signals exist, add a generic API node once
@@ -433,8 +502,7 @@ def main():
                         "name": "Backend API",
                         "type": "Service",
                         "tech": "HTTPS API",
-                        "evidence": [{"source": "code", "path": p} for p in upload_ev]
-                        + [{"source": "gradle", "path": p} for p in gradle_ev],
+                        "evidence": [{"source": "code", "path": p} for p in upload_ev],
                     }
                 )
             relations.append(
@@ -443,41 +511,30 @@ def main():
                     "to": svc_id,
                     "verb": "calls",
                     "through": {"protocol": "HTTPS"},
-                    "evidence": [{"source": "code", "path": p} for p in upload_ev]
-                    + [{"source": "gradle", "path": p} for p in gradle_ev],
-                    "confidence": confidence_score(
-                        [
-                            bool(upload_ev),
-                            bool(gradle_deps["retrofit"] or gradle_deps["okhttp"]),
-                        ]
-                    ),
+                    "evidence": [{"source": "code", "path": p} for p in upload_ev],
                 }
             )
 
-    # Persistence nodes
-    if room_ev or gradle_deps["room"]:
-        comp_id = "room-sqlite"
-        components.append(
-            {
-                "id": comp_id,
-                "name": "Room (SQLite)",
-                "type": "DB",
-                "tech": "SQLite via Room",
-                "evidence": [{"source": "code", "path": p} for p in room_ev]
-                + [{"source": "gradle", "path": p} for p in gradle_ev],
-            }
-        )
-        relations.append(
-            {
-                "from": app_id,
-                "to": comp_id,
-                "verb": "reads/writes",
-                "through": {"protocol": "in-process"},
-                "evidence": [{"source": "code", "path": p} for p in room_ev],
-                "confidence": confidence_score([True]),
-            }
-        )
-    if enc_ev or gradle_deps["sec_crypto"]:
+     # NEW: Persistence — direct SQLite (no Room)
+    if sqlite_ev:
+        comp_id = "sqlite-db"
+        components.append({
+            "id": comp_id,
+            "name": "SQLite (SQLiteDatabase)",
+            "type": "DB",
+            "tech": "Android SQLiteDatabase",
+            "evidence": [{"source":"code","path":p} for p in sqlite_ev]
+        })
+        relations.append({
+            "from": app_id,
+            "to": comp_id,
+            "verb": "reads/writes",
+            "through": {"protocol":"in-process"},
+            "evidence": [{"source":"code","path":p} for p in sqlite_ev],
+        })
+
+    # Encrypted preferences
+    if enc_ev:
         comp_id = "encrypted-shared-prefs"
         components.append(
             {
@@ -496,7 +553,6 @@ def main():
                 "verb": "stores",
                 "through": {"protocol": "in-process"},
                 "evidence": [{"source": "code", "path": p} for p in enc_ev],
-                "confidence": confidence_score([True]),
             }
         )
 
