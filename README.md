@@ -95,10 +95,83 @@ graph LR
 ```
 
 **Principles**
-- Every node/edge has **evidence** and a **confidence**.
-- IDs are stable (kebab-case), names are human-friendly.
-- Keep it small; add fields only when they drive decisions.
+- Every node/edge has **evidence**.
 
 ---
 
 ## 3) Where facts come from (signals)
+
+- **Code:** imports & calls (AppAuth, Retrofit/OkHttp, `SQLiteDatabase`, OAuth flows).
+- **Build/Deps:** `build.gradle(.kts)`, **version catalogs** (`gradle/libs.versions.toml`), **buildSrc/Dependencies.kt**, convention plugins.
+- **Configs:** `AndroidManifest.xml` (redirect schemes/permissions), `openapi.yaml`, env/config YAML.
+- **IaC:** K8s/Helm/Terraform (gateways, managed IdPs, DBs).
+
+---
+
+## 4) Where AI/Agents add outsized value
+
+- **Naming & normalization** across repos (Auth/IdP/Keycloak → one node).
+- **Summaries** for component cards from AFM + evidence.
+- **Drift explanation**: reconcile runtime vs AFM; propose fixes.
+- **Rule authoring**: turn policy text into Semgrep or AFM validators.
+- **Remediation PRs**: add missing OpenAPI security, issuer allowlists, etc.
+
+---
+
+## 5) CI/CD & IDE (reference workflow)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Dev as Developer
+  participant VCS as GitHub/GitLab
+  participant CI as CI Runner
+  participant Scan as archscan (central)
+  participant Val as validate_afm
+  participant Reg as AFM Registry
+  participant Agg as Merger + AI
+  participant PR as PR/MR Comment
+  participant Dash as Dashboard
+
+  Dev->>VCS: Open/Update PR
+  VCS->>CI: Trigger workflow
+  CI->>Scan: archscan --repo <target>
+  Scan-->>CI: afm.json + diagram.mmd
+  CI->>Val: validate_afm (policies)
+  Val-->>CI: OK / Fail
+  CI->>PR: Comment Mermaid + AFM excerpt
+  CI->>Reg: Publish AFM (per repo/commit)
+  Agg->>Reg: Nightly merge/dedupe + AI summaries
+  Agg->>Dash: Update global landscape
+```
+
+---
+
+## 6) How to use this repo
+
+**Local dev (fast loop)**
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+python archscan.py --repo . --out afm.json --diagram diagrams/landscape.mmd
+
+# local android repo
+python archscan_android.py --repo ~/code/android-repo   --out outputs/android-afm.json --diagram outputs/android.mmd
+```
+
+**Render diagram**
+- Paste `.mmd` into the Mermaid Live Editor, or:
+```bash
+npm i -g @mermaid-js/mermaid-cli
+mmdc -i diagrams/landscape.mmd -o diagrams/landscape.svg
+```
+
+---
+
+## Policies & guardrails (examples)
+- **Issuer allowlist** for OAuth (`config/allowed_issuers.txt`).
+- **Issuer allowlist** for Persistence (`config/android-persistence`).
+- **Issuer allowlist** for Upload (`config/android-upload`).
+- **Issuer allowlist** for Android-Auth (`config/oauth-semgrep`).
