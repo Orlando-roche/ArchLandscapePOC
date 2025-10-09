@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse, json, os, re, sys, yaml
 from urllib.parse import urlparse
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, List
 
 TEXT_EXTS = {
     ".md",
